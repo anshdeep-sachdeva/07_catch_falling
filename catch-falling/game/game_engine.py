@@ -22,6 +22,8 @@ MAX_OBJECTS = 5
 SPAWN_MARGIN = 20
 MIN_SPAWN_DISTANCE = 60
 MAX_MISSES = 5
+BOOST_MULTIPLIER = 2
+BOOST_DURATION_MS = 3000
 
 
 class GameEngine:
@@ -33,6 +35,7 @@ class GameEngine:
         self.score = 0
         self.misses = 0
         self.game_over = False
+        self.boost_end_time = 0
 
     def _spawn_object(self):
         if len(self.objects) >= MAX_OBJECTS:
@@ -71,19 +74,33 @@ class GameEngine:
         if self.game_over:
             return
 
+        movement_speed = self.basket.speed
+        if pygame.time.get_ticks() < self.boost_end_time:
+            movement_speed *= BOOST_MULTIPLIER
+
         if keys_pressed[pygame.K_LEFT]:
-            self.basket.x -= self.basket.speed
+            self.basket.x -= movement_speed
         if keys_pressed[pygame.K_RIGHT]:
-            self.basket.x += self.basket.speed
+            self.basket.x += movement_speed
 
         half_width = self.basket.get_rect().width / 2
         self.basket.x = max(
             half_width,
             min(WIDTH - half_width, self.basket.x),
         )
+
     def handle_keydown(self, key):
-        if self.game_over and key == pygame.K_r:
-            self.__init__()
+        if self.game_over:
+            if key == pygame.K_r:
+                self.__init__()
+            return
+
+        if key == pygame.K_SPACE:
+            now = pygame.time.get_ticks()
+
+            # An active boost cannot be extended or stacked.
+            if now >= self.boost_end_time:
+                self.boost_end_time = now + BOOST_DURATION_MS
 
     def update(self):
         if self.game_over:
@@ -118,6 +135,22 @@ class GameEngine:
         renderer.draw_scene(surface, self.basket, self.objects)
         renderer.draw_text(surface, font, f"Score: {self.score}", (10, 10))
         renderer.draw_text(surface, font, f"Misses: {self.misses}/{MAX_MISSES}", (10, 36))
+
+        if not self.game_over:
+            boost_remaining = (
+                self.boost_end_time - pygame.time.get_ticks()
+            )
+
+            if boost_remaining > 0:
+                boost_text = (
+                    f"BOOST ACTIVE: {boost_remaining / 1000:.1f}s"
+                )
+            else:
+                boost_text = "Boost: SPACE"
+
+            renderer.draw_text(
+                surface, font, boost_text, (10, 62)
+            )
 
         if self.game_over:
             renderer.draw_banner(surface, font, f"Game Over! Final score: {self.score}. Press R to restart.")
