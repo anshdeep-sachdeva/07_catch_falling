@@ -16,7 +16,11 @@ from game.falling_object import FallingObject
 from game.collision import is_caught
 from game.renderer import WIDTH, HEIGHT
 
-SPAWN_INTERVAL_FRAMES = 50
+MIN_SPAWN_INTERVAL_FRAMES = 30
+MAX_SPAWN_INTERVAL_FRAMES = 70
+MAX_OBJECTS = 5
+SPAWN_MARGIN = 20
+MIN_SPAWN_DISTANCE = 60
 MAX_MISSES = 5
 
 
@@ -25,13 +29,43 @@ class GameEngine:
         self.basket = Basket(x=WIDTH / 2, y=HEIGHT - 30)
         self.objects = []
         self.frames_until_spawn = 0
+        self.last_spawn_x = None
         self.score = 0
         self.misses = 0
         self.game_over = False
 
     def _spawn_object(self):
-        x = random.randint(20, WIDTH - 20)
+        if len(self.objects) >= MAX_OBJECTS:
+            return
+
+        min_x = SPAWN_MARGIN
+        max_x = WIDTH - SPAWN_MARGIN
+        spawn_ranges = [(min_x, max_x)]
+
+        if self.last_spawn_x is not None:
+            spawn_ranges = []
+
+            left_end = self.last_spawn_x - MIN_SPAWN_DISTANCE
+            right_start = self.last_spawn_x + MIN_SPAWN_DISTANCE
+
+            if left_end >= min_x:
+                spawn_ranges.append((min_x, left_end))
+
+            if right_start <= max_x:
+                spawn_ranges.append((right_start, max_x))
+
+        if spawn_ranges:
+            start, end = random.choice(spawn_ranges)
+            x = random.randint(start, end)
+        else:
+            # On narrow screens, use the furthest available edge.
+            x = max(
+                (min_x, max_x),
+                key=lambda position: abs(position - self.last_spawn_x),
+            )
+
         self.objects.append(FallingObject(x=x, y=-14, speed=3))
+        self.last_spawn_x = x
 
     def handle_input(self, keys_pressed):
         if self.game_over:
@@ -58,7 +92,10 @@ class GameEngine:
         self.frames_until_spawn -= 1
         if self.frames_until_spawn <= 0:
             self._spawn_object()
-            self.frames_until_spawn = SPAWN_INTERVAL_FRAMES
+            self.frames_until_spawn = random.randint(
+                MIN_SPAWN_INTERVAL_FRAMES,
+                MAX_SPAWN_INTERVAL_FRAMES,
+            )
 
         for obj in self.objects:
             obj.update()
